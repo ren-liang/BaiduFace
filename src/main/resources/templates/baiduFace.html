@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="Access-Control-Allow-Origin" content="*" />
+	<title>大脸识别</title>
+	<script src="jquery.js" type="text/javascript" charset="utf-8"></script>
+</head>
+
+<body>
+<div class="main">
+	<video id="video" autoplay style="width: 640px;height: 480px"></video>
+	<!--拍照按钮-->
+	<!--描绘video截图-->
+	<canvas id="canvas" width="640" height="480"></canvas>
+</div>
+
+<script>
+
+	window.onload = function() {
+		let timer = setInterval(() => {
+			context.drawImage(video, 0, 0, 640, 480);
+			var image = new Image();
+			image.src = canvas.toDataURL("image/png");
+			ImgBase64 = String(image.src).split(",")[1];
+			var canvasElement = document.getElementById('canvas')
+			canvasElement.hidden = true
+			$.ajax({
+				type: "post",
+				url: "/face/getAccessToken",
+				async: true,
+				contentType: 'application/json;charset=utf-8',
+				success: function(res) {
+					$.ajax({
+						type: "post",
+						dataType: 'json',
+						url: "https://aip.baidubce.com/rest/2.0/face/v3/faceverify?access_token=" + res,
+						async: true,
+						data: [{
+							"image": ImgBase64,
+							"image_type": "BASE64"
+						}],
+						contentType: 'application/json;charset=utf-8',
+						success: function(res2) {
+							$.ajax({
+								type: "post",
+								dataType: 'json',
+								url: "https://aip.baidubce.com/rest/2.0/face/v3/search?access_token=" + res,
+								async: true,
+								data: JSON.stringify({
+									"image": ImgBase64,
+									"image_type": "BASE64",
+									"group_id_list": "user01"
+								}),
+								contentType: 'application/json;charset=utf-8',
+								success: function(res3) {
+									if(res3.error_code === 0 && res3.result.user_list[0].score >= 80.0){
+										$.ajax({
+											type:"get",
+											url:"/face/selectUser?userId="+res3.result.user_list[0].user_id,
+											async:true,
+											success:function(res4){
+												alert(res4)
+												clearInterval(timer)
+											}
+										});
+									}
+
+								}
+							});
+						}
+					});
+
+				}
+			});
+		}, 1000)
+		//          	clearInterval(timer)
+		//访问用户媒体设备的兼容方法
+		function getUserMedia(constraints, success, error) {
+			if(navigator.mediaDevices.getUserMedia) {
+				//最新的标准API
+				navigator.mediaDevices.getUserMedia(constraints).then(success).catch(error);
+			} else if(navigator.webkitGetUserMedia) {
+				//webkit核心浏览器
+				navigator.webkitGetUserMedia(constraints, success, error)
+			} else if(navigator.mozGetUserMedia) {
+				//firfox浏览器
+				navigator.mozGetUserMedia(constraints, success, error);
+			} else if(navigator.getUserMedia) {
+				//旧版API
+				navigator.getUserMedia(constraints, success, error);
+			}
+		}
+
+		let video = document.getElementById('video');
+		let canvas = document.getElementById('canvas');
+		let context = canvas.getContext('2d');
+
+		function success(stream) {
+			video.srcObject = stream;
+			video.play();
+		}
+
+		function error(error) {
+			console.log(`访问用户媒体设备失败${error.name}, ${error.message}`);
+		}
+
+		if(navigator.mediaDevices.getUserMedia || navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia) {
+			if(!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+				console.log("enumerateDevices() not supported.");
+				return;
+			}
+			// 列出摄像头和麦克风
+			var exArray = [];
+			navigator.mediaDevices.enumerateDevices()
+					.then(function(devices) {
+						devices.forEach(function(device) {
+							// console.log(device.kind + ": " + device.label +
+							// " id = " + device.deviceId);
+							if(device.kind == "videoinput") {
+								// alert(device.label);
+								exArray.push(device.deviceId);
+							}
+						});
+						var mediaOpts = {
+							video: {
+								width: 420,
+								height: 120
+							}
+						};
+						var mediaOpts = {
+							video: {
+								deviceId: {
+									exact: exArray[1]
+								}
+							}
+						};
+						//调用用户媒体设备, 访问摄像头
+						getUserMedia(mediaOpts, success, error);
+					})
+					.catch(function(err) {
+						console.log(err.name + ": " + err.message);
+					});
+
+		} else {
+			alert('不支持访问用户媒体');
+		}
+	}
+</script>
+</body>
+
+</html>
